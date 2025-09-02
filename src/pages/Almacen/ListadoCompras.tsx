@@ -226,8 +226,13 @@ export function ListadoCompras() {
         return;
       }
 
-      // Get Almacen Principal ID
-      const selectedWarehouseName = newDetalle.ubicacion_fisica || 'ALMACEN-PRINCIPAL';
+      // Get selected warehouse ID - use the actual selected warehouse
+      const selectedWarehouseName = newDetalle.ubicacion_fisica;
+      if (!selectedWarehouseName) {
+        setValidationErrors({ ubicacion_fisica: 'Debe seleccionar un almacén' });
+        return;
+      }
+      
       const { data: selectedWarehouse, error: almacenError } = await supabase
         .from('almacenes')
         .select('id')
@@ -366,6 +371,18 @@ export function ListadoCompras() {
           user_name: 'Sistema Compras'
         });
 
+      // Registrar la compra como gasto en el sistema contable
+      await supabase
+        .from('expenses')
+        .insert({
+          concept: `Compra de ${newDetalle.producto}`,
+          amount: newDetalle.importe,
+          date: new Date().toISOString().split('T')[0],
+          category: 'Compras',
+          bank_account: 'Efectivo',
+          description: `Compra de ${newDetalle.cantidad} ${newDetalle.unidad_medida} de ${newDetalle.producto} del proveedor ${selectedSupplier.name}. Almacén: ${selectedWarehouseName}`
+        });
+
       setNewDetalle({
         producto: '',
         codigo_barras: '',
@@ -390,7 +407,10 @@ export function ListadoCompras() {
       setShowForm(false);
       setPendingSubmit(false);
       setShowCostWarning(false);
-      alert(existingProduct ? 'Producto actualizado y compra registrada exitosamente' : `Compra registrada exitosamente en ${selectedWarehouseName}`);
+      alert(existingProduct ? 
+        `Producto actualizado y compra registrada exitosamente en ${selectedWarehouseName}. Gasto registrado en contabilidad.` : 
+        `Compra registrada exitosamente en ${selectedWarehouseName}. Gasto registrado en contabilidad.`
+      );
     } catch (err) {
       console.error('Error creating purchase:', err);
       setValidationErrors({ general: 'Error al registrar la compra: ' + (err instanceof Error ? err.message : 'Error desconocido') });
@@ -784,8 +804,11 @@ export function ListadoCompras() {
                         value={newDetalle.unidad_medida}
                         onChange={(e) => handleInputChange('unidad_medida', e.target.value)}
                         className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          validationErrors.ubicacion_fisica ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                        }`}
                           validationErrors.unidad_medida ? 'border-red-300 bg-red-50' : 'border-gray-300'
                         }`}
+                        required
                         required
                       >
                         <option value="">Seleccionar</option>
@@ -797,6 +820,9 @@ export function ListadoCompras() {
                         <option value="METRO">METRO</option>
                         <option value="TONELADA">TONELADA</option>
                       </select>
+                      {validationErrors.ubicacion_fisica && (
+                        <p className="text-red-500 text-xs mt-1">{validationErrors.ubicacion_fisica}</p>
+                      )}
                       {validationErrors.unidad_medida && (
                         <p className="text-red-500 text-xs mt-1">{validationErrors.unidad_medida}</p>
                       )}
