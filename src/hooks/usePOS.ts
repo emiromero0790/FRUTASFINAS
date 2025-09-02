@@ -718,28 +718,22 @@ export function usePOS() {
         // Handle vale payment - save only the cash amount paid
         const valeAmount = paymentData.valeAmount || Math.min(paymentData.selectedVale.disponible, orderData.total);
         const cashAmount = paymentData.cashAmount || Math.max(0, orderData.total - valeAmount);
-        const totalPaidInCash = cashAmount; // Only the cash portion
         
-        // Create payment record for cash portion only
-        if (cashAmount > 0) {
-          const { error: paymentError } = await supabase
-            .from('payments')
-            .insert({
-              sale_id: orderId,
-              amount: cashAmount,
-              payment_method: 'cash',
-              reference: paymentData.reference || `VALE-CASH-${Date.now().toString().slice(-6)}`,
-              created_by: user?.id
-            });
-
-          if (paymentError) throw paymentError;
-        }
-
-        // Update vale balance
+        console.log('🎫 Processing vale payment:', {
+          orderId,
+          originalTotal: orderData.total,
+          valeAmount,
+          cashAmount,
+          valeId: paymentData.selectedVale.id,
+          valeBalance: paymentData.selectedVale.disponible
+        });
+        
+        // STEP 1: Update vale balance FIRST
+        console.log('🎫 Updating vale balance...');
         const newValeBalance = paymentData.selectedVale.disponible - valeAmount;
         const newValeStatus = newValeBalance <= 0 ? 'USADO' : 'HABILITADO';
         
-        await supabase
+        const { error: valeError } = await supabase
           .from('vales_devolucion')
           .update({
             disponible: Math.max(0, newValeBalance),
@@ -747,24 +741,12 @@ export function usePOS() {
           })
           .eq('id', paymentData.selectedVale.id);
 
-        // Calculate new totals - save only cash amount as the total
-        const newAmountPaid = (orderData.amount_paid || 0) + cashAmount;
-        const adjustedTotal = cashAmount; // Save only the cash amount as total
-        const newRemainingBalance = 0; // Fully paid since vale covered the rest
-        const newStatus = 'paid';
-
-        // Update order with adjusted total (cash amount only)
-        const { error: updateError } = await supabase
-          .from('sales')
-          .update({
-            total: adjustedTotal, // Save only cash amount
-            amount_paid: newAmountPaid,
-            remaining_balance: newRemainingBalance,
-            status: newStatus
-          })
-          .eq('id', orderId);
-
-        if (updateError) throw updateError;
+        if (valeError) {
+          console.error('❌ Error updating vale:', valeError);
+          throw new Error('Error al actualizar el vale de devolución');
+        }
+        
+        console.log('✅ Vale balance updated successfully');
 
         // STEP 2: Process inventory movements BEFORE deleting sale record
         console.log('📦 Processing inventory movements for vale payment...');
@@ -801,37 +783,27 @@ export function usePOS() {
           }
         }
         
-        // STEP 3: DELETE the sale record to avoid double counting
-        // The original sale that generated the vale was already counted
-        console.log('🗑️ Deleting sale record to prevent double counting...');
-        
-        // First delete sale items (foreign key constraint)
-        const { error: deleteSaleError } = await supabase
-          .from('sale_items')
-          .delete()
-          .eq('sale_id', orderId);
-
-        if (deleteSaleError) {
-          console.error('Error deleting sale items:', deleteSaleError);
-          throw new Error('Error al eliminar los items de la venta');
-        }
-
-        // Then delete the sale record
-        const { error: deleteSaleRecordError } = await supabase
-          .from('sales')
-          .delete()
-          .eq('id', orderId);
-
-        if (deleteSaleRecordError) {
-          console.error('Error deleting sale record:', deleteSaleRecordError);
-          throw new Error('Error al eliminar el registro de venta');
-        }
-
-        console.log(`✅ Sale record deleted successfully for vale payment: ${orderId}`);
-
-        // STEP 4: Only create payment record for cash portion if any
+        // STEP 3: Handle sale record based on cash amount
         if (cashAmount > 0) {
-          console.log('💰 Creating payment record for cash portion:', cashAmount);
+          // If there's cash payment, update sale record with only cash amount
+          console.log('💰 Updating sale record with cash amount only:', cashAmount);
+          
+          const { error: updateError } = await supabase
+            .from('sales')
+            .update({
+              total: cashAmount, // Save only cash amount as total
+              amount_paid: cashAmount,
+              remaining_balance: 0,
+              status: 'paid'
+            })
+            .eq('id', orderId);
+
+          if (updateError) {
+            console.error('Error updating sale with cash amount:', updateError);
+            throw new Error('Error al actualizar la venta con el monto en efectivo');
+          }
+          
+          // Create payment record for cash portion
           const { error: paymentError } = await supabase
             .from('payments')
             .insert({
@@ -844,13 +816,41 @@ export function usePOS() {
 
           if (paymentError) {
             console.error('Error creating cash payment:', paymentError);
-            // Don't throw error here as the main vale transaction succeeded
+            // Don't throw error here as the main transaction succeeded
           }
-        }
+          
+          console.log(`✅ Sale updated with cash amount: ${cashAmount}. Vale amount (${valeAmount}) not counted as revenue.`);
+          return { newAmountPaid: cashAmount, newRemainingBalance: 0, newStatus: 'paid' };
+        } else {
+          // If vale covers everything, DELETE the sale record to avoid double counting
+          console.log('🗑️ Vale covers full amount - Deleting sale record to prevent double counting...');
+          
+          // First delete sale items (foreign key constraint)
+          const { error: deleteSaleItemsError } = await supabase
+            .from('sale_items')
+            .delete()
+            .eq('sale_id', orderId);
 
-        console.log(`✅ Vale payment processed successfully. Vale amount: ${valeAmount}, Cash amount: ${cashAmount}`);
-        console.log('🚫 Sale record deleted - NO double counting of revenue');
-        return { newAmountPaid: 0, newRemainingBalance: 0, newStatus: 'paid' };
+          if (deleteSaleItemsError) {
+            console.error('Error deleting sale items:', deleteSaleItemsError);
+            throw new Error('Error al eliminar los items de la venta');
+          }
+
+          // Then delete the sale record
+          const { error: deleteSaleRecordError } = await supabase
+            .from('sales')
+            .delete()
+            .eq('id', orderId);
+
+          if (deleteSaleRecordError) {
+            console.error('Error deleting sale record:', deleteSaleRecordError);
+            throw new Error('Error al eliminar el registro de venta');
+          }
+
+          console.log(`✅ Sale record deleted successfully for vale payment: ${orderId}`);
+          console.log('🚫 NO revenue recorded - vale payment does not count as new sale');
+          return { newAmountPaid: 0, newRemainingBalance: 0, newStatus: 'paid' };
+        }
       } else {
         // For non-credit payments, process normally
         // Create payment record
@@ -1002,7 +1002,7 @@ export function usePOS() {
         }
 
         return { newAmountPaid, newRemainingBalance, newStatus };
-      }
+        }
 
       await fetchOrders();
       

@@ -1146,13 +1146,32 @@ SISTEMA ERP DURAN
                                 <span className="font-semibold">Total a Pagar:</span>
                                 <span className="font-bold text-orange-600">${amountToPay.toFixed(2)}</span>
                               </div>
-                              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mt-2">
+                              <div className="bg-green-50 border border-green-200 rounded-lg p-2 mt-2">
                                 <div className="text-xs text-yellow-800">
                                   <p className="font-medium">Nota:</p>
-                                  <p>En la base de datos se guardará únicamente el importe pagado en efectivo (${(amountToPay - selectedVale.disponible).toFixed(2)})</p>
+                                  <p className="text-green-800">✅ Solo se registrará como venta el monto pagado en efectivo: ${(amountToPay - selectedVale.disponible).toFixed(2)}</p>
+                                  <p className="text-green-700">El vale (${selectedVale.disponible.toFixed(2)}) NO se contará como nueva venta para evitar doble contabilización.</p>
                                 </div>
                               </div>
                             </div>
+                        
+                        {/* Información importante sobre vales */}
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
+                          <div className="flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div className="text-sm text-green-800">
+                              <p className="font-medium">Información Importante:</p>
+                              <p>Los vales de devolución NO se contabilizan como nuevas ventas para evitar duplicar ingresos.</p>
+                              {selectedVale.disponible >= amountToPay ? (
+                                <p className="font-bold">Este pedido NO aparecerá en reportes de ventas.</p>
+                              ) : (
+                                <p className="font-bold">Solo el efectivo (${(amountToPay - selectedVale.disponible).toFixed(2)}) aparecerá en reportes de ventas.</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                           </div>
                         )}
 
