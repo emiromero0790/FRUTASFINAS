@@ -571,8 +571,8 @@ CLIENTE: ${order.client_name}
 
 PRODUCTOS:
 --------------------------
-${order.items.map(item => 
-  `${item.quantity.toString().padEnd(4)} ${item.product_name.length > 20 ? item.product_name.substring(0, 20) : item.product_name.padEnd(20)} $${item.total.toFixed(2).padStart(8)}`
+${order.items.map(item =>
+  `${item.quantity.toString().padEnd(4)} ${item.product_name.length > 20 ? item.product_name.substring(0, 20) : item.product_name.padEnd(20)} $${(item.total / item.quantity).toFixed(2).padEnd(8)} $${item.total.toFixed(2).padStart(8)}`
 ).join('\n')}
 --------------------------
 
