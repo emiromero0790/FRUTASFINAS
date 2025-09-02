@@ -247,13 +247,6 @@ export function MovimientosEfectivo() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Movimientos de Efectivo</h1>
         <div className="flex items-center space-x-4">
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={16} />
-            <span>Nuevo Movimiento</span>
-          </button>
           <div className="text-sm text-gray-500">
             Actualización automática cada 5 segundos
           </div>
