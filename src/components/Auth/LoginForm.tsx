@@ -445,59 +445,7 @@ const buttonGradient = isERS
               </form>
             </div>
 
-            {/* Test Users Info Section */}
-            <div className={`bg-gradient-to-r ${isERS ? 'from-blue-50 to-slate-50' : 'from-orange-50 to-slate-50'} px-4 sm:px-6 lg:px-8 py-6 sm:py-7 lg:py-8 border-t border-gray-100`}>
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-4 sm:mb-6">
-                  <div className="flex items-center bg-white rounded-full px-3 sm:px-4 py-1.5 sm:py-2 shadow-md border border-gray-100">
-                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-green-400 rounded-full mr-2 sm:mr-3 animate-pulse"></div>
-                    <Database className={`w-4 h-4 sm:w-5 sm:h-5 ${isERS ? 'text-blue-600' : 'text-orange-600'} mr-1 sm:mr-2`} />
-                    <div className="text-left">
-                      <p className="text-xs sm:text-sm font-semibold text-gray-800">Sistema Conectado</p>
-                      <p className="text-[10px] sm:text-xs text-gray-600">Base de datos Supabase activa</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
-                  <p className="text-sm font-semibold text-gray-800 mb-4 sm:mb-6">
-                    Usuarios de Prueba Disponibles para {selectedSystem}:
-                  </p>
-                  
-                  <div className="space-y-3 sm:space-y-4">
-                    {testUsers.map((user, index) => {
-                      const IconComponent = user.icon;
-                      return (
-                        <div key={index} className="flex items-center justify-between py-2 sm:py-3 px-3 sm:px-4 bg-gray-50 rounded-lg sm:rounded-xl hover:bg-gray-100 transition-colors duration-200">
-                          <div className="flex items-center">
-                            <div className={`w-8 h-8 sm:w-10 sm:h-10 ${user.bgColor} rounded-lg sm:rounded-xl flex items-center justify-center mr-3 sm:mr-4 shadow-sm`}>
-                              <IconComponent className={`w-4 h-4 sm:w-5 sm:h-5 ${user.iconColor}`} />
-                            </div>
-                            <div className="text-left">
-                              <p className="text-xs sm:text-sm font-semibold text-gray-800">{user.role}</p>
-                              <p className="text-[10px] sm:text-xs text-gray-600">{user.email}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[10px] sm:text-xs font-mono bg-gray-200 px-2 sm:px-3 py-0.5 sm:py-1 rounded-md text-gray-700 font-semibold">
-                              {user.password}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  
-                  <div className={`mt-4 sm:mt-6 p-3 sm:p-4 ${isERS ? 'bg-blue-50 border-blue-100' : 'bg-orange-50 border-orange-100'} rounded-lg sm:rounded-xl border`}>
-                    <p className={`text-[10px] sm:text-xs ${isERS ? 'text-blue-700' : 'text-orange-700'} flex items-center justify-center font-medium`}>
-                      <span className="inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full mr-1 sm:mr-2 animate-pulse"></span>
-                      ⚠️ IMPORTANTE: Debes crear los usuarios antes del primer uso del sistema
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+           
 
           {/* Footer */}
           <div className="text-center mt-6 sm:mt-8">
