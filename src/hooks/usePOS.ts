@@ -420,8 +420,72 @@ export function usePOS() {
       
       console.log('Processing payment with warehouse distribution:', warehouseDistribution);
 
-      // Get current order data with updated totals
-      const { data: orderData, error: orderError } = await supabase
+      // Handle vale payments differently - don't fetch from database if temp order
+      let orderData: any;
+      const isNewOrder = orderId.startsWith('temp-');
+      
+      if (paymentData.method === 'vales' && isNewOrder) {
+        // For new vale payments, we don't need to fetch from database
+        // We'll process inventory directly from the current order context
+        console.log('🎫 Processing new vale payment without database lookup');
+        
+        // We'll handle inventory movements directly in the calling component
+        // For now, return success without creating sale record
+        
+        // Update vale balance
+        const valeAmount = paymentData.valeAmount || Math.min(paymentData.selectedVale.disponible, paymentData.amount);
+        const cashAmount = paymentData.cashAmount || Math.max(0, paymentData.amount - valeAmount);
+        
+        const newValeBalance = paymentData.selectedVale.disponible - valeAmount;
+        const newValeStatus = newValeBalance <= 0 ? 'USADO' : 'HABILITADO';
+        
+        const { error: valeError } = await supabase
+          .from('vales_devolucion')
+          .update({
+            disponible: Math.max(0, newValeBalance),
+            estatus: newValeStatus
+          })
+          .eq('id', paymentData.selectedVale.id);
+
+        if (valeError) {
+          console.error('❌ Error updating vale:', valeError);
+          throw new Error('Error al actualizar el vale de devolución');
+        }
+        
+        // If there's cash amount, create a minimal sale record
+        if (cashAmount > 0) {
+          console.log('💰 Creating sale record for cash portion only:', cashAmount);
+          
+          const { data: newSale, error: createError } = await supabase
+            .from('sales')
+            .insert({
+              client_id: paymentData.client_id || null,
+              client_name: paymentData.client_name || 'Cliente General',
+              date: new Date().toISOString().split('T')[0],
+              total: cashAmount, // Only cash amount
+              amount_paid: cashAmount,
+              remaining_balance: 0,
+              status: 'paid',
+              created_by: user?.id
+            })
+            .select()
+            .single();
+
+          if (createError) {
+            console.error('Error creating sale with cash amount:', createError);
+            throw new Error('Error al crear la venta con el monto en efectivo');
+          }
+          
+          console.log(`✅ Sale created with cash amount only: ${cashAmount}`);
+          return { newAmountPaid: cashAmount, newRemainingBalance: 0, newStatus: 'paid', saleId: newSale.id };
+        } else {
+          console.log('🚫 Vale covers full amount - NO sale record created');
+          return { newAmountPaid: 0, newRemainingBalance: 0, newStatus: 'paid', saleId: null };
+        }
+      }
+      
+      // For non-vale payments or existing orders, get current order data
+      const { data: fetchedOrderData, error: orderError } = await supabase
         .from('sales')
         .select(`
           *,
@@ -437,6 +501,8 @@ export function usePOS() {
         .single();
 
       if (orderError) throw orderError;
+      
+      orderData = fetchedOrderData;
 
       // Handle mixed payment with credit
       if (paymentData.method === 'mixed' && paymentData.breakdown && paymentData.breakdown.credit > 0) {
