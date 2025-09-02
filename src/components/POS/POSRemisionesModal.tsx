@@ -377,12 +377,18 @@ export function POSRemisionesModal({ onClose }: POSRemisionesModalProps) {
       return;
     }
 
+    // Generar un folio de remisión único
+    const baseRemisionFolio = newRemision.folio_remision.trim();
+    const uniqueRemisionFolio = `${baseRemisionFolio}-${Date.now().toString().slice(-6)}`;
+
+    console.log('Creando remisión con folio único:', uniqueRemisionFolio);
+
     try {
       const { data, error } = await supabase
         .from('remisiones')
         .insert({
           folio: `VTA-${Date.now().toString().slice(-6)}`,
-          folio_remision: newRemision.folio_remision,
+          folio_remision: uniqueRemisionFolio,
           sale_id: newRemision.sale_id,
           fecha: new Date().toISOString().split('T')[0],
           importe: selectedSale.total,
@@ -405,7 +411,7 @@ export function POSRemisionesModal({ onClose }: POSRemisionesModalProps) {
       const newRemisionData: Remision = {
         id: data.id,
         folio: data.folio,
-        folio_remision: newRemision.folio_remision,
+        folio_remision: uniqueRemisionFolio,
         fecha: data.fecha,
         importe: data.importe,
         cliente: data.cliente,
