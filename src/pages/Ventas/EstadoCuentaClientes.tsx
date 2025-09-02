@@ -213,20 +213,6 @@ export function EstadoCuentaClientes() {
         return (isNaN(date.getTime()) || !(date instanceof Date)) ? 'N/A' : date.toLocaleDateString('es-MX');
       }
     },
-    { 
-      key: 'dias_vencimiento', 
-      label: 'Días Vencimiento', 
-      sortable: true,
-      render: (value: number) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          value <= 30 ? 'bg-green-100 text-green-800' :
-          value <= 60 ? 'bg-yellow-100 text-yellow-800' :
-          'bg-red-100 text-red-800'
-        }`}>
-          {value} días
-        </span>
-      )
-    },
     {
       key: 'estatus',
       label: 'Estatus',
