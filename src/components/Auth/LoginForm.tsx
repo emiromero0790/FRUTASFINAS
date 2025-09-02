@@ -441,25 +441,7 @@ const buttonGradient = isERS
 
             
 
-                {/* Create Test Users Button */}
-                <button
-                  type="button"
-                  onClick={createTestUsers}
-                  disabled={isCreatingUsers}
-                  className={`w-full flex justify-center items-center py-3 sm:py-4 px-4 sm:px-6 border-2 ${isERS ? 'border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 focus:ring-blue-200' : 'border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-300 focus:ring-orange-200'} text-sm sm:text-base font-semibold rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md`}
-                >
-                  <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
-                  {isCreatingUsers ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-1 sm:mr-2"></div>
-                      Creando usuarios...
-                    </>
-                  ) : (
-                    'Crear Usuarios de Prueba'
-                  )}
-                </button>
-              </form>
-            </div>
+              
 
             {/* Test Users Info Section */}
             <div className={`bg-gradient-to-r ${isERS ? 'from-blue-50 to-slate-50' : 'from-orange-50 to-slate-50'} px-4 sm:px-6 lg:px-8 py-6 sm:py-7 lg:py-8 border-t border-gray-100`}>
