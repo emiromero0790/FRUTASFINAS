@@ -24,7 +24,6 @@ const menuItems = [
     title: 'Almacén',
     items: [
       { name: 'Captura de Inventario', path: '/almacen/inventario', icon: Package },
-      { name: 'Listado de Productos', path: '/almacen/listado-productos', icon: Package },
       { name: 'Ajustes de Inventario', path: '/almacen/ajustes', icon: Settings },
       { name: 'Listado de Compras', path: '/almacen/listado-compras', icon: ShoppingCart },
       { name: 'Proveedores', path: '/almacen/proveedores', icon: Users },
@@ -48,7 +47,6 @@ const menuItems = [
     items: [
       { name: 'Cuentas Bancarias', path: '/contabilidad/catalogos', icon: Settings },
       { name: 'Registro de Gastos', path: '/contabilidad/gastos', icon: CreditCard },
-      { name: 'Movimientos Bancarios', path: '/contabilidad/bancarios', icon: BarChart3 },
       { name: 'Movimientos de efectivo POS', path: '/contabilidad/movimientos-efectivo', icon: Calculator },
       { name: 'Reporte de Gastos', path: '/contabilidad/reporte-gastos', icon: FileText },
     ]
@@ -56,9 +54,7 @@ const menuItems = [
   {
     title: 'Ventas - Clientes',
     items: [
-      { name: 'CFDI', path: '/ventas/cfdi', icon: FileText },
       { name: 'Clientes', path: '/ventas/clientes', icon: Users },
-  
       { name: 'Reportes de Ventas', path: '/ventas/reportes', icon: BarChart3 },
       { name: 'Listado de Remisiones', path: '/ventas/listado-remisiones', icon: FileText },
     ]
