@@ -104,12 +104,14 @@ export function Catalogos() {
       try {
         if (activeTab === 'conceptos') {
           await deleteConcepto(id);
+          alert('Concepto eliminado exitosamente');
         } else {
           await deleteCuenta(id);
+          alert('Cuenta bancaria eliminada exitosamente');
         }
       } catch (err) {
         console.error('Error deleting item:', err);
-        alert('Error al eliminar el elemento');
+        alert('Error al eliminar el elemento: ' + (err instanceof Error ? err.message : 'Error desconocido'));
       }
     }
   };

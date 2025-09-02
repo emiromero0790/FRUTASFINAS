@@ -21,6 +21,7 @@ export function EstadoTraspaso() {
     getWarehouseStock 
   } = useWarehouseTransfers();
   
+  const [processingTransfers, setProcessingTransfers] = useState<Set<string>>(new Set());
 
   const [showForm, setShowForm] = useState(false);
   const [newTraspaso, setNewTraspaso] = useState({
@@ -85,12 +86,27 @@ export function EstadoTraspaso() {
   };
 
   const updateEstatus = async (transferId: string, newStatus: WarehouseTransfer['status']) => {
+    // Prevent multiple clicks by checking if already processing
+    if (processingTransfers.has(transferId)) {
+      return;
+    }
+    
+    // Add to processing set
+    setProcessingTransfers(prev => new Set(prev).add(transferId));
+    
     try {
       await updateTransferStatus(transferId, newStatus);
       alert('Estado actualizado exitosamente');
     } catch (err) {
       console.error('Error updating status:', err);
       alert('Error al actualizar el estado');
+    } finally {
+      // Remove from processing set after completion
+      setProcessingTransfers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(transferId);
+        return newSet;
+      });
     }
   };
 
@@ -169,7 +185,12 @@ export function EstadoTraspaso() {
           {transfer.status === 'pendiente' && (
             <button
               onClick={() => updateEstatus(transfer.id, 'completado')}
-              className="p-1 text-green-600 hover:text-green-800"
+              disabled={processingTransfers.has(transfer.id)}
+              className={`p-1 transition-colors ${
+                processingTransfers.has(transfer.id)
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-green-600 hover:text-green-800'
+              }`}
               title="Marcar como transferido"
             >
               <CheckCircle size={16} />
@@ -178,7 +199,12 @@ export function EstadoTraspaso() {
           {(transfer.status === 'pendiente' || transfer.status === 'en_transito') && (
             <button
               onClick={() => updateEstatus(transfer.id, 'cancelado')}
-              className="p-1 text-red-600 hover:text-red-800"
+              disabled={processingTransfers.has(transfer.id)}
+              className={`p-1 transition-colors ${
+                processingTransfers.has(transfer.id)
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-red-600 hover:text-red-800'
+              }`}
               title="Cancelar traspaso"
             >
               <XCircle size={16} />

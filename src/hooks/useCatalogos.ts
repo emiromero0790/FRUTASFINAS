@@ -220,12 +220,19 @@ export function useCatalogos() {
 
   const deleteCuenta = async (id: string) => {
     try {
+      console.log('Attempting to delete bank account with ID:', id);
+      
       const { error } = await supabase
         .from('bank_accounts')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error deleting bank account:', error);
+        throw error;
+      }
+
+      console.log('Bank account deleted successfully from database');
 
       setCuentas(prev => prev.filter(c => c.id !== id));
       
@@ -233,7 +240,10 @@ export function useCatalogos() {
       if (window.triggerSync) {
         window.triggerSync();
       }
+      
+      console.log('Local state updated, bank account removed from UI');
     } catch (err) {
+      console.error('Error in deleteCuenta function:', err);
       throw new Error(err instanceof Error ? err.message : 'Error deleting cuenta');
     }
   };

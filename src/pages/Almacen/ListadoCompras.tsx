@@ -474,7 +474,7 @@ export function ListadoCompras() {
       sortable: true,
       render: (value: string) => new Date(value).toLocaleDateString('es-MX')
     },
-    { key: 'almacen_entrada', label: 'Almacén de Entrada', sortable: true },
+    { key: 'almacen_entrada', label: 'Almacenes de Destino', sortable: true },
     { key: 'proveedor', label: 'Proveedor', sortable: true },
     { 
       key: 'monto_total', 
