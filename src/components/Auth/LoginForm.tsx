@@ -441,7 +441,9 @@ const buttonGradient = isERS
 
             
 
-              
+               
+              </form>
+            </div>
 
             {/* Test Users Info Section */}
             <div className={`bg-gradient-to-r ${isERS ? 'from-blue-50 to-slate-50' : 'from-orange-50 to-slate-50'} px-4 sm:px-6 lg:px-8 py-6 sm:py-7 lg:py-8 border-t border-gray-100`}>
