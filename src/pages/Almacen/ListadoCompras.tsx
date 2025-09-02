@@ -474,18 +474,6 @@ export function ListadoCompras() {
       sortable: true,
       render: (value: string) => new Date(value).toLocaleDateString('es-MX')
     },
-    { key: 'almacen_entrada', label: 'Almacenes de Destino', sortable: true },
-    { key: 'proveedor', label: 'Proveedor', sortable: true },
-    { 
-      key: 'monto_total', 
-      label: 'Monto Total', 
-      sortable: true,
-      render: (value: number) => (
-        <span className="font-semibold text-green-600">
-          ${value.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-        </span>
-      )
-    },
     {
       key: 'estatus',
       label: 'Estatus',
