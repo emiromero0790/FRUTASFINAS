@@ -169,13 +169,6 @@ export function Catalogos() {
           >
             <Edit size={16} />
           </button>
-          <button
-            onClick={() => handleDelete(concepto.id)}
-            className="p-1 text-red-600 hover:text-red-800"
-            title="Eliminar"
-          >
-            <Trash2 size={16} />
-          </button>
         </div>
       )
     }
