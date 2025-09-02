@@ -446,7 +446,6 @@ const buttonGradient = isERS
             </div>
 
 
-              </div>
             </div>
           </div>
 
