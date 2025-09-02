@@ -429,8 +429,117 @@ export function usePOS() {
         // We'll process inventory directly from the current order context
         console.log('🎫 Processing new vale payment without database lookup');
         
-        // We'll handle inventory movements directly in the calling component
-        // For now, return success without creating sale record
+        // Process inventory movements for vale payments on new orders
+        // Get the current order items from the component context
+        const currentOrderItems = JSON.parse(localStorage.getItem('currentOrderItems') || '[]');
+        const warehouseDistribution = paymentData.warehouseDistribution || 
+          JSON.parse(localStorage.getItem('warehouseDistribution') || '{}');
+        
+        console.log('📦 Processing inventory for vale payment with items:', currentOrderItems);
+        console.log('📦 Using warehouse distribution:', warehouseDistribution);
+        
+        // Process inventory movements for each item
+        for (const item of currentOrderItems) {
+          const itemDistribution = warehouseDistribution[item.product_id];
+          
+          if (itemDistribution && itemDistribution.length > 0) {
+            // Process each warehouse distribution for this item
+            for (const dist of itemDistribution) {
+              // Create inventory movement for each warehouse
+              await supabase
+                .from('inventory_movements')
+                .insert({
+                  product_id: item.product_id,
+                  product_name: item.product_name,
+                  type: 'salida',
+                  quantity: dist.quantity,
+                  date: new Date().toISOString().split('T')[0],
+                  reference: `POS-VALE-${orderId.slice(-6)}-${dist.warehouse_name}`,
+                  user_name: user?.name || 'POS User',
+                  created_by: user?.id
+                });
+
+              // Update warehouse-specific stock
+              const { data: currentStock, error: fetchError } = await supabase
+                .from('stock_almacenes')
+                .select('stock')
+                .eq('almacen_id', dist.warehouse_id)
+                .eq('product_id', item.product_id)
+                .maybeSingle();
+
+              if (fetchError && fetchError.code !== 'PGRST116') {
+                throw fetchError;
+              }
+
+              const newWarehouseStock = (currentStock?.stock || 0) - dist.quantity;
+              
+              if (currentStock) {
+                // Update existing warehouse stock
+                await supabase
+                  .from('stock_almacenes')
+                  .update({ stock: Math.max(0, parseFloat(newWarehouseStock.toFixed(3))) })
+                  .eq('almacen_id', dist.warehouse_id)
+                  .eq('product_id', item.product_id);
+              } else {
+                // Create new warehouse stock record with negative stock
+                await supabase
+                  .from('stock_almacenes')
+                  .insert({
+                    almacen_id: dist.warehouse_id,
+                    product_id: item.product_id,
+                    stock: Math.max(0, parseFloat((-dist.quantity).toFixed(3)))
+                  });
+              }
+            }
+            
+            // Update general product stock with total distributed quantity
+            const totalDistributedForItem = itemDistribution.reduce((sum, dist) => sum + dist.quantity, 0);
+            const { data: product } = await supabase
+              .from('products')
+              .select('stock')
+              .eq('id', item.product_id)
+              .single();
+
+            if (product) {
+              await supabase
+                .from('products')
+                .update({ stock: Math.max(0, parseFloat((product.stock - totalDistributedForItem).toFixed(3))) })
+                .eq('id', item.product_id);
+              
+              console.log(`📦 Stock updated for ${item.product_name}: ${product.stock} → ${Math.max(0, parseFloat((product.stock - totalDistributedForItem).toFixed(3)))}`);
+            }
+          } else {
+            // Fallback: No warehouse distribution, use general stock
+            await supabase
+              .from('inventory_movements')
+              .insert({
+                product_id: item.product_id,
+                product_name: item.product_name,
+                type: 'salida',
+                quantity: item.quantity,
+                date: new Date().toISOString().split('T')[0],
+                reference: `POS-VALE-${orderId.slice(-6)}`,
+                user_name: user?.name || 'POS User',
+                created_by: user?.id
+              });
+
+            // Update general product stock
+            const { data: product } = await supabase
+              .from('products')
+              .select('stock')
+              .eq('id', item.product_id)
+              .single();
+
+            if (product) {
+              await supabase
+                .from('products')
+                .update({ stock: Math.max(0, parseFloat((product.stock - item.quantity).toFixed(3))) })
+                .eq('id', item.product_id);
+              
+              console.log(`📦 Stock updated for ${item.product_name}: ${product.stock} → ${Math.max(0, parseFloat((product.stock - item.quantity).toFixed(3)))}`);
+            }
+          }
+        }
         
         // Update vale balance
         const valeAmount = paymentData.valeAmount || Math.min(paymentData.selectedVale.disponible, paymentData.amount);
@@ -459,8 +568,8 @@ export function usePOS() {
           const { data: newSale, error: createError } = await supabase
             .from('sales')
             .insert({
-              client_id: paymentData.client_id || null,
-              client_name: paymentData.client_name || 'Cliente General',
+              client_id: currentOrderItems[0]?.client_id || null,
+              client_name: currentOrderItems[0]?.client_name || 'Cliente General',
               date: new Date().toISOString().split('T')[0],
               total: cashAmount, // Only cash amount
               amount_paid: cashAmount,
@@ -476,6 +585,27 @@ export function usePOS() {
             throw new Error('Error al crear la venta con el monto en efectivo');
           }
           
+           // Create sale items proportionally for the cash amount
+           const cashRatio = cashAmount / (paymentData.valeAmount + cashAmount);
+           const saleItems = currentOrderItems.map((item: any) => ({
+             sale_id: newSale.id,
+             product_id: item.product_id,
+             product_name: item.product_name,
+             quantity: item.quantity * cashRatio, // Proportional quantity
+             price: item.unit_price,
+             total: item.total * cashRatio // Proportional total
+           }));
+
+           if (saleItems.length > 0) {
+             const { error: itemsError } = await supabase
+               .from('sale_items')
+               .insert(saleItems);
+
+             if (itemsError) {
+               console.error('Error creating sale items:', itemsError);
+             }
+           }
+           
           console.log(`✅ Sale created with cash amount only: ${cashAmount}`);
           return { newAmountPaid: cashAmount, newRemainingBalance: 0, newStatus: 'paid', saleId: newSale.id };
         } else {

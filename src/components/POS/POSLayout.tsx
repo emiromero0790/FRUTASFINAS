@@ -354,6 +354,17 @@ export function POSLayout() {
         // For new orders, save first then process payment
         // Check if payment method is vales
         if (paymentData.method === 'vales') {
+          // Store current order items in localStorage for vale processing
+          localStorage.setItem('currentOrderItems', JSON.stringify(currentOrder.items.map(item => ({
+            product_id: item.product_id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.total,
+            client_id: currentOrder.client_id,
+            client_name: currentOrder.client_name
+          }))));
+          
           // For vale payments, process directly without creating sale record
           const result = await processPayment(currentOrder.id, {
             amount: currentOrder.total,
@@ -365,6 +376,9 @@ export function POSLayout() {
             cashAmount: paymentData.cashAmount,
             warehouseDistribution: JSON.parse(localStorage.getItem('warehouseDistribution') || '{}')
           });
+          
+          // Clean up localStorage after processing
+          localStorage.removeItem('currentOrderItems');
           
           setLastOrder({
             id: currentOrder.id,
