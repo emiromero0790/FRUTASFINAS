@@ -647,7 +647,7 @@ CLIENTE: ${t.client_name}
 
 PRODUCTOS:
 --------------------------
-CANT. PRODUCTO              P. UNITARIO     TOTAL
+CANT. PRODUCTO            P. UNITARIO     TOTAL
 ${t.items.map(qe=>`${qe.quantity.toString().padEnd(4)} ${qe.product_name.length>20?qe.product_name.substring(0,20):qe.product_name.padEnd(20)} $${(qe.total/qe.quantity).toFixed(2).padStart(8)} $${qe.total.toFixed(2).padStart(8)}`).join(`
 `)}
 --------------------------
