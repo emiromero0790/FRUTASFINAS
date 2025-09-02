@@ -228,29 +228,37 @@ export function ListadoCompras() {
       }
 
       // Get selected warehouse ID - use the actual selected warehouse
-      const selectedWarehouseName = newDetalle.ubicacion_fisica;
-      if (!selectedWarehouseName) {
+      if (!newDetalle.ubicacion_fisica) {
         setValidationErrors({ ubicacion_fisica: 'Debe seleccionar un almacén' });
         return;
       }
       
-      const { data: selectedWarehouse, error: almacenError } = await supabase
+      // Find the warehouse by name to get its ID
+      const selectedWarehouse = warehouses.find(w => w.name === newDetalle.ubicacion_fisica);
+      if (!selectedWarehouse) {
+        setValidationErrors({ general: `No se encontró el almacén ${newDetalle.ubicacion_fisica}` });
+        return;
+      }
+
+      // Verify warehouse exists in database
+      const { data: warehouseData, error: almacenError } = await supabase
         .from('almacenes')
-        .select('id')
-        .eq('nombre', selectedWarehouseName)
+        .select('id, nombre')
+        .eq('id', selectedWarehouse.id)
         .maybeSingle();
 
       if (almacenError) {
         console.error('Error finding warehouse:', almacenError);
-        setValidationErrors({ general: `No se encontró el almacén ${selectedWarehouseName} en la base de datos` });
+        setValidationErrors({ general: `Error al verificar el almacén: ${almacenError.message}` });
         return;
       }
 
-      if (!selectedWarehouse) {
-        console.error('Warehouse not found');
-        setValidationErrors({ general: `No se encontró el almacén ${selectedWarehouseName} en la base de datos. Por favor, créelo primero.` });
+      if (!warehouseData) {
+        setValidationErrors({ general: `El almacén ${newDetalle.ubicacion_fisica} no existe en la base de datos` });
         return;
       }
+
+      console.log('Using warehouse:', warehouseData);
 
       // Check if product with this code already exists
       const productCode = newDetalle.codigo_barras || `PROD-${Date.now()}`;
@@ -312,11 +320,11 @@ export function ListadoCompras() {
         productId = newProduct.id;
       }
 
-      // Update or create stock in Almacén Principal
+      // Update or create stock in the selected warehouse
       const { data: existingStock, error: stockCheckError } = await supabase
         .from('stock_almacenes')
         .select()
-        .eq('almacen_id', selectedWarehouse.id)
+        .eq('almacen_id', warehouseData.id)
         .eq('product_id', productId)
         .maybeSingle();
 
@@ -335,7 +343,7 @@ export function ListadoCompras() {
         await supabase
           .from('stock_almacenes')
           .insert({
-            almacen_id: selectedWarehouse.id,
+            almacen_id: warehouseData.id,
             product_id: productId,
             stock: newDetalle.cantidad
           });
@@ -368,7 +376,7 @@ export function ListadoCompras() {
           type: 'entrada',
           quantity: newDetalle.cantidad,
           date: new Date().toISOString().split('T')[0],
-          reference: `COMPRA-${Date.now().toString().slice(-6)}`,
+          reference: `COMPRA-${warehouseData.nombre}-${Date.now().toString().slice(-6)}`,
           user_name: 'Sistema Compras'
         });
 
@@ -376,13 +384,16 @@ export function ListadoCompras() {
       await supabase
         .from('expenses')
         .insert({
-          concept: `Compra de ${newDetalle.producto}`,
+          concept: `Compra de ${newDetalle.producto} - ${selectedSupplier.name}`,
           amount: newDetalle.importe,
           date: new Date().toISOString().split('T')[0],
-          category: 'Compras',
+          category: 'Compras de Mercancía',
           bank_account: 'Efectivo',
-          description: `Compra de ${newDetalle.cantidad} ${newDetalle.unidad_medida} de ${newDetalle.producto} del proveedor ${selectedSupplier.name}. Almacén: ${selectedWarehouseName}`
+          description: `Compra de ${newDetalle.cantidad} ${newDetalle.unidad_medida} de ${newDetalle.producto} del proveedor ${selectedSupplier.name}. Almacén de destino: ${warehouseData.nombre}. Costo unitario: $${newDetalle.costo_unitario.toFixed(2)}`
         });
+
+      console.log(`✅ Compra guardada exitosamente en almacén: ${warehouseData.nombre} (ID: ${warehouseData.id})`);
+      console.log(`✅ Gasto registrado en contabilidad por $${newDetalle.importe.toFixed(2)}`);
 
       setNewDetalle({
         producto: '',
@@ -408,9 +419,10 @@ export function ListadoCompras() {
       setShowForm(false);
       setPendingSubmit(false);
       setShowCostWarning(false);
+      setValidationErrors({});
       alert(existingProduct ? 
-        `Producto actualizado y compra registrada exitosamente en ${selectedWarehouseName}. Gasto registrado en contabilidad.` : 
-        `Compra registrada exitosamente en ${selectedWarehouseName}. Gasto registrado en contabilidad.`
+        `✅ Producto actualizado y compra registrada exitosamente en ${warehouseData.nombre}. Gasto de $${newDetalle.importe.toFixed(2)} registrado en contabilidad.` : 
+        `✅ Compra registrada exitosamente en ${warehouseData.nombre}. Gasto de $${newDetalle.importe.toFixed(2)} registrado en contabilidad.`
       );
     } catch (err) {
       console.error('Error creating purchase:', err);
@@ -945,23 +957,32 @@ export function ListadoCompras() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ubicación Física
+                      Almacén de Destino *
                     </label>
                     <select
                       value={newDetalle.ubicacion_fisica}
                       onChange={(e) => handleInputChange('ubicacion_fisica', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        validationErrors.ubicacion_fisica ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
                       disabled={warehousesLoading}
+                      required
                     >
                       <option value="">
                         {warehousesLoading ? 'Cargando almacenes...' : 'Seleccionar almacén'}
                       </option>
-                      {warehouses.map(warehouse => (
+                      {warehouses.filter(w => w.active).map(warehouse => (
                         <option key={warehouse.id} value={warehouse.name}>
                           {warehouse.name} - {warehouse.location}
                         </option>
                       ))}
                     </select>
+                    {validationErrors.ubicacion_fisica && (
+                      <p className="text-red-500 text-xs mt-1">{validationErrors.ubicacion_fisica}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      El stock se agregará al almacén seleccionado
+                    </p>
                   </div>
                 </div>
               </div>
