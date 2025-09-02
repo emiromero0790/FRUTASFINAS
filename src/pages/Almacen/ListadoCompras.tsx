@@ -773,20 +773,6 @@ export function ListadoCompras() {
                       <p className="text-red-500 text-xs mt-1">{validationErrors.proveedor_id}</p>
                     )}
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Código de Barras
-                    </label>
-                    <input
-                      type="text"
-                      value={newDetalle.codigo_barras}
-                      onChange={(e) => handleInputChange('codigo_barras', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Código de barras del producto"
-                    />
-                  </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Marca
