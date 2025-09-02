@@ -163,7 +163,7 @@ export function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
                 }`}
               >
                 <option value="">Seleccionar línea</option>
-                <option value="Duran">Duran</option>
+                <option value="Duran">DURAN</option>
                 
               </select>
               {errors.line && <p className="text-red-500 text-xs mt-1">{errors.line}</p>}
