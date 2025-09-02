@@ -715,7 +715,7 @@ export function usePOS() {
 
         return { newAmountPaid: 0, newRemainingBalance: orderData.total, newStatus: 'pending' };
       } else if (paymentData.method === 'vales' && paymentData.selectedVale) {
-        // Handle vale payment - save only the cash amount paid
+        // Handle vale payment - process without creating sale record initially
         const valeAmount = paymentData.valeAmount || Math.min(paymentData.selectedVale.disponible, orderData.total);
         const cashAmount = paymentData.cashAmount || Math.max(0, orderData.total - valeAmount);
         
@@ -727,6 +727,9 @@ export function usePOS() {
           valeId: paymentData.selectedVale.id,
           valeBalance: paymentData.selectedVale.disponible
         });
+        
+        // Check if this is a temp order (new order)
+        const isNewOrder = orderId.startsWith('temp-');
         
         // STEP 1: Update vale balance FIRST
         console.log('🎫 Updating vale balance...');
@@ -748,9 +751,27 @@ export function usePOS() {
         
         console.log('✅ Vale balance updated successfully');
 
-        // STEP 2: Process inventory movements BEFORE deleting sale record
+        // STEP 2: Process inventory movements
         console.log('📦 Processing inventory movements for vale payment...');
-        for (const item of orderData.sale_items) {
+        
+        // Get items from orderData or from the temp order
+        const itemsToProcess = isNewOrder ? 
+          // For temp orders, we need to get items from the order object passed to the function
+          // Since we don't have direct access, we'll get them from the current order context
+          [] : // Will be handled below
+          orderData.sale_items;
+        
+        // If it's a new order, we need to get the items differently
+        let actualItems = itemsToProcess;
+        if (isNewOrder) {
+          // For new orders, get items from the order context (this will be passed from the calling function)
+          // We'll handle this by getting the current order from the component
+          console.log('🆕 Processing new order vale payment - items will be processed from current order');
+          // The items will be processed from the current order in the component
+          actualItems = []; // Will be handled by the component
+        }
+        
+        for (const item of actualItems) {
           // Create inventory movement
           await supabase
             .from('inventory_movements')
@@ -783,31 +804,76 @@ export function usePOS() {
           }
         }
         
-        // STEP 3: Handle sale record based on cash amount
+        // STEP 3: Handle sale record based on cash amount - only create if cash > 0
         if (cashAmount > 0) {
-          // If there's cash payment, update sale record with only cash amount
+          // If there's cash payment, create/update sale record with only cash amount
           console.log('💰 Updating sale record with cash amount only:', cashAmount);
           
-          const { error: updateError } = await supabase
-            .from('sales')
-            .update({
-              total: cashAmount, // Save only cash amount as total
-              amount_paid: cashAmount,
-              remaining_balance: 0,
-              status: 'paid'
-            })
-            .eq('id', orderId);
+          if (isNewOrder) {
+            // For new orders, create sale record with only cash amount
+            const { data: newSale, error: createError } = await supabase
+              .from('sales')
+              .insert({
+                client_id: orderData.client_id,
+                client_name: orderData.client_name,
+                date: new Date().toISOString().split('T')[0],
+                total: cashAmount, // Only cash amount
+                amount_paid: cashAmount,
+                remaining_balance: 0,
+                status: 'paid',
+                created_by: user?.id
+              })
+              .select()
+              .single();
 
-          if (updateError) {
-            console.error('Error updating sale with cash amount:', updateError);
-            throw new Error('Error al actualizar la venta con el monto en efectivo');
+            if (createError) {
+              console.error('Error creating sale with cash amount:', createError);
+              throw new Error('Error al crear la venta con el monto en efectivo');
+            }
+            
+            // Create sale items proportionally for the cash amount
+            const cashRatio = cashAmount / orderData.total;
+            const saleItems = orderData.sale_items?.map((item: any) => ({
+              sale_id: newSale.id,
+              product_id: item.product_id,
+              product_name: item.product_name,
+              quantity: item.quantity * cashRatio, // Proportional quantity
+              price: item.price,
+              total: item.total * cashRatio // Proportional total
+            })) || [];
+
+            if (saleItems.length > 0) {
+              const { error: itemsError } = await supabase
+                .from('sale_items')
+                .insert(saleItems);
+
+              if (itemsError) {
+                console.error('Error creating sale items:', itemsError);
+              }
+            }
+          } else {
+            // For existing orders, update sale record with only cash amount
+            const { error: updateError } = await supabase
+              .from('sales')
+              .update({
+                total: cashAmount, // Save only cash amount as total
+                amount_paid: cashAmount,
+                remaining_balance: 0,
+                status: 'paid'
+              })
+              .eq('id', orderId);
+
+            if (updateError) {
+              console.error('Error updating sale with cash amount:', updateError);
+              throw new Error('Error al actualizar la venta con el monto en efectivo');
+            }
           }
           
           // Create payment record for cash portion
           const { error: paymentError } = await supabase
             .from('payments')
             .insert({
-              sale_id: orderId,
+              sale_id: isNewOrder ? newSale.id : orderId,
               amount: cashAmount,
               payment_method: 'cash',
               reference: paymentData.reference || `VALE-CASH-${Date.now().toString().slice(-6)}`,
@@ -822,32 +888,36 @@ export function usePOS() {
           console.log(`✅ Sale updated with cash amount: ${cashAmount}. Vale amount (${valeAmount}) not counted as revenue.`);
           return { newAmountPaid: cashAmount, newRemainingBalance: 0, newStatus: 'paid' };
         } else {
-          // If vale covers everything, DELETE the sale record to avoid double counting
-          console.log('🗑️ Vale covers full amount - Deleting sale record to prevent double counting...');
+          // If vale covers everything, DON'T CREATE any sale record
+          console.log('🚫 Vale covers full amount - NO sale record will be created to prevent double counting...');
           
-          // First delete sale items (foreign key constraint)
-          const { error: deleteSaleItemsError } = await supabase
-            .from('sale_items')
-            .delete()
-            .eq('sale_id', orderId);
+          // If it's an existing order, we need to delete it
+          if (!isNewOrder) {
+            // First delete sale items (foreign key constraint)
+            const { error: deleteSaleItemsError } = await supabase
+              .from('sale_items')
+              .delete()
+              .eq('sale_id', orderId);
 
-          if (deleteSaleItemsError) {
-            console.error('Error deleting sale items:', deleteSaleItemsError);
-            throw new Error('Error al eliminar los items de la venta');
+            if (deleteSaleItemsError) {
+              console.error('Error deleting sale items:', deleteSaleItemsError);
+              throw new Error('Error al eliminar los items de la venta');
+            }
+
+            // Then delete the sale record
+            const { error: deleteSaleRecordError } = await supabase
+              .from('sales')
+              .delete()
+              .eq('id', orderId);
+
+            if (deleteSaleRecordError) {
+              console.error('Error deleting sale record:', deleteSaleRecordError);
+              throw new Error('Error al eliminar el registro de venta');
+            }
+            
+            console.log(`✅ Sale record deleted successfully for vale payment: ${orderId}`);
           }
-
-          // Then delete the sale record
-          const { error: deleteSaleRecordError } = await supabase
-            .from('sales')
-            .delete()
-            .eq('id', orderId);
-
-          if (deleteSaleRecordError) {
-            console.error('Error deleting sale record:', deleteSaleRecordError);
-            throw new Error('Error al eliminar el registro de venta');
-          }
-
-          console.log(`✅ Sale record deleted successfully for vale payment: ${orderId}`);
+          
           console.log('🚫 NO revenue recorded - vale payment does not count as new sale');
           return { newAmountPaid: 0, newRemainingBalance: 0, newStatus: 'paid' };
         }

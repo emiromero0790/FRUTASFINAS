@@ -352,56 +352,78 @@ export function POSLayout() {
         }
       } else {
         // For new orders, save first then process payment
-        const savedOrder = await saveOrder(currentOrder, paymentData.stockOverride);
-        
-        // Update the active order with the new database ID
-        updateActiveOrder(savedOrder);
-        
-        // Process the payment using the hook
-        const paymentAmount = paymentData.method === 'mixed' 
-          ? paymentData.breakdown.cash + paymentData.breakdown.card + paymentData.breakdown.transfer + paymentData.breakdown.credit
-          : currentOrder.total;
+        // Check if payment method is vales
+        if (paymentData.method === 'vales') {
+          // For vale payments, process directly without creating sale record
+          const result = await processPayment(currentOrder.id, {
+            amount: currentOrder.total,
+            method: paymentData.method,
+            reference: paymentData.reference,
+            stockOverride: paymentData.stockOverride,
+            selectedVale: paymentData.selectedVale,
+            valeAmount: paymentData.valeAmount,
+            cashAmount: paymentData.cashAmount,
+            warehouseDistribution: JSON.parse(localStorage.getItem('warehouseDistribution') || '{}')
+          });
           
-        // For vale payments, calculate the amounts
-        let processPaymentData = {
-          amount: paymentAmount,
-          method: paymentData.method,
-          reference: paymentData.reference,
-          stockOverride: paymentData.stockOverride
-        };
-
-        if (paymentData.method === 'vales' && paymentData.selectedVale) {
-          const valeAmount = Math.min(paymentData.selectedVale.disponible, currentOrder.total);
-          const cashAmount = Math.max(0, currentOrder.total - valeAmount);
+          setLastOrder({
+            id: currentOrder.id,
+            client_name: currentOrder.client_name,
+            total: paymentData.cashAmount || 0, // Only show cash amount if any
+            items_count: currentOrder.items.length,
+            date: new Date().toISOString(),
+            status: 'paid'
+          });
           
-          processPaymentData = {
-            ...processPaymentData,
-            valeAmount: valeAmount,
-            cashAmount: cashAmount
-          };
-        }
-        
-        const result = await processPayment(savedOrder.id, processPaymentData);
-        
-        setLastOrder({
-          id: savedOrder.id,
-          client_name: currentOrder.client_name,
-          total: currentOrder.total,
-          items_count: currentOrder.items.length,
-          date: new Date().toISOString(),
-          status: result.newStatus
-        });
-        
-        markTabAsSaved(activeTabId);
-        closeTab(activeTabId); // Close the tab after payment
-        setShowPaymentModal(false);
-        
-        if (paymentData.method === 'credit') {
-          alert('✅ Pedido guardado como CRÉDITO - Estado: PENDIENTE');
-        } else if (result.newStatus === 'paid') {
-          alert('✅ Pago procesado exitosamente - Pedido marcado como PAGADO');
+          markTabAsSaved(activeTabId);
+          closeTab(activeTabId);
+          setShowPaymentModal(false);
+          
+          if (paymentData.cashAmount > 0) {
+            alert(`✅ Pago con vale procesado - Solo se registró como venta: $${paymentData.cashAmount.toFixed(2)}`);
+          } else {
+            alert('✅ Pago con vale procesado - No se registró como venta (vale cubrió el total)');
+          }
         } else {
-          alert(`✅ Abono procesado exitosamente - Saldo restante: $${result.newRemainingBalance.toFixed(2)}`);
+          // For non-vale payments, save order first then process payment
+          const savedOrder = await saveOrder(currentOrder, paymentData.stockOverride);
+          
+          // Update the active order with the new database ID
+          updateActiveOrder(savedOrder);
+          
+          // Process the payment using the hook
+          const paymentAmount = paymentData.method === 'mixed' 
+            ? paymentData.breakdown.cash + paymentData.breakdown.card + paymentData.breakdown.transfer + paymentData.breakdown.credit
+            : currentOrder.total;
+            
+          const result = await processPayment(savedOrder.id, {
+            amount: paymentAmount,
+            method: paymentData.method,
+            reference: paymentData.reference,
+            stockOverride: paymentData.stockOverride,
+            warehouseDistribution: JSON.parse(localStorage.getItem('warehouseDistribution') || '{}')
+          });
+          
+          setLastOrder({
+            id: savedOrder.id,
+            client_name: currentOrder.client_name,
+            total: currentOrder.total,
+            items_count: currentOrder.items.length,
+            date: new Date().toISOString(),
+            status: result.newStatus
+          });
+          
+          markTabAsSaved(activeTabId);
+          closeTab(activeTabId); // Close the tab after payment
+          setShowPaymentModal(false);
+          
+          if (paymentData.method === 'credit') {
+            alert('✅ Pedido guardado como CRÉDITO - Estado: PENDIENTE');
+          } else if (result.newStatus === 'paid') {
+            alert('✅ Pago procesado exitosamente - Pedido marcado como PAGADO');
+          } else {
+            alert(`✅ Abono procesado exitosamente - Saldo restante: $${result.newRemainingBalance.toFixed(2)}`);
+          }
         }
       }
     } catch (err) {
