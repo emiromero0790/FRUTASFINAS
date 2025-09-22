@@ -255,6 +255,129 @@ export function POSCashModal({ cashRegister, onClose, onOpenRegister, onCloseReg
              
 
 
+              {/* Botón Vista Previa Pre-Corte */}
+              <button
+                onClick={() => {
+                  // Generar e imprimir pre-corte
+                  const preCorteContent = `
+PRE CORTE DE CAJA
+==================
+
+RESUMEN GENERAL
+
+INFORMACIÓN DE LA CAJA:
+- Usuario: ${user?.name || 'Usuario'}
+- Avatar: ${user?.avatar || 'Sin avatar'}
+- Fecha: ${new Date().toLocaleDateString('es-MX')}
+- Hora: ${new Date().toLocaleTimeString('es-MX')}
+- Caja ID: ${cashRegister.id.slice(-6).toUpperCase()}
+
+APERTURA DE CAJA:
+- Monto de Apertura: $${cashRegister.opening_amount.toFixed(2)}
+- Hora de Apertura: ${new Date(cashRegister.opened_at).toLocaleTimeString('es-MX')}
+- Tiempo Activo: ${Math.floor((Date.now() - new Date(cashRegister.opened_at).getTime()) / (1000 * 60 * 60))}h ${Math.floor(((Date.now() - new Date(cashRegister.opened_at).getTime()) % (1000 * 60 * 60)) / (1000 * 60))}m
+
+VENTAS REALIZADAS:
+- Total de Ventas: $${totalSales.toFixed(2)}
+- Número de Tickets: ${loadingSales ? 'Calculando...' : 'N/A'}
+- Ticket Promedio: $${loadingSales ? 'Calculando...' : 'N/A'}
+- Ventas en Efectivo: $${cashRegister.total_cash.toFixed(2)}
+- Ventas con Tarjeta: $${cashRegister.total_card.toFixed(2)}
+- Ventas Transferencia: $${cashRegister.total_transfer.toFixed(2)}
+
+EFECTIVO ESPERADO:
+- Apertura: $${cashRegister.opening_amount.toFixed(2)}
+- + Ventas Efectivo: $${cashRegister.total_cash.toFixed(2)}
+- = Efectivo Esperado: $${(cashRegister.opening_amount + totalSales).toFixed(2)}
+
+==================
+ESTE ES UN PRE-CORTE
+NO ES EL CORTE OFICIAL
+==================
+
+SISTEMA ERP DURAN
+${new Date().toLocaleString('es-MX')}
+                  `;
+
+                  // Crear ventana de impresión
+                  const printWindow = window.open('', '_blank');
+                  if (printWindow) {
+                    printWindow.document.write(`
+                      <html>
+                      <head>
+                        <title>Pre_Corte_Caja_ffd.txt</title>
+                        <style>
+                          body { 
+                            font-family: 'Courier New', monospace; 
+                            font-size: 12px; 
+                            margin: 20px;
+                            max-width: 400px;
+                            line-height: 1.3;
+                          }
+                          .logo { text-align: left; margin-bottom: 10px; }
+                          .logo img { max-width: 80px; height: auto; }
+                          .header { text-align: left; font-weight: bold; margin-bottom: 10px; }
+                          .separator { text-align: center; margin: 10px 0; }
+                          .total { font-weight: bold; font-size: 14px; }
+                          .footer { text-align: center; margin-top: 15px; font-size: 10px; }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="logo">
+                          <img src="${window.location.origin}/logoduran2.png" alt="DURAN" />
+                        </div>
+                        <div class="header">PRE CORTE DE CAJA</div>
+                        <div class="separator">==================</div>
+                        <br>
+                        <div class="header">RESUMEN GENERAL</div>
+                        <br>
+                        <div>INFORMACIÓN DE LA CAJA:</div>
+                        <div>- Usuario: ${user?.name || 'Usuario'}</div>
+                        <div>- Avatar: ${user?.avatar || 'Sin avatar'}</div>
+                        <div>- Fecha: ${new Date().toLocaleDateString('es-MX')}</div>
+                        <div>- Hora: ${new Date().toLocaleTimeString('es-MX')}</div>
+                        <div>- Caja ID: ${cashRegister.id.slice(-6).toUpperCase()}</div>
+                        <br>
+                        <div>APERTURA DE CAJA:</div>
+                        <div>- Monto de Apertura: $${cashRegister.opening_amount.toFixed(2)}</div>
+                        <div>- Hora de Apertura: ${new Date(cashRegister.opened_at).toLocaleTimeString('es-MX')}</div>
+                        <div>- Tiempo Activo: ${Math.floor((Date.now() - new Date(cashRegister.opened_at).getTime()) / (1000 * 60 * 60))}h ${Math.floor(((Date.now() - new Date(cashRegister.opened_at).getTime()) % (1000 * 60 * 60)) / (1000 * 60))}m</div>
+                        <br>
+                        <div>VENTAS REALIZADAS:</div>
+                        <div>- Total de Ventas: $${totalSales.toFixed(2)}</div>
+                        <div>- Ventas en Efectivo: $${cashRegister.total_cash.toFixed(2)}</div>
+                        <div>- Ventas con Tarjeta: $${cashRegister.total_card.toFixed(2)}</div>
+                        <div>- Ventas Transferencia: $${cashRegister.total_transfer.toFixed(2)}</div>
+                        <br>
+                        <div>EFECTIVO ESPERADO:</div>
+                        <div>- Apertura: $${cashRegister.opening_amount.toFixed(2)}</div>
+                        <div>- + Ventas Efectivo: $${cashRegister.total_cash.toFixed(2)}</div>
+                        <div class="total">- = Efectivo Esperado: $${(cashRegister.opening_amount + totalSales).toFixed(2)}</div>
+                        <br>
+                        <div class="separator">==================</div>
+                        <div class="total">ESTE ES UN PRE-CORTE</div>
+                        <div class="total">NO ES EL CORTE OFICIAL</div>
+                        <div class="separator">==================</div>
+                        <br>
+                        <div class="footer">SISTEMA ERP DURAN</div>
+                        <div class="footer">${new Date().toLocaleString('es-MX')}</div>
+                      </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    setTimeout(() => {
+                      printWindow.print();
+                      printWindow.close();
+                    }, 250);
+                  }
+
+                  alert('Pre-corte de caja impreso exitosamente');
+                }}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors mb-4"
+              >
+                Vista Previa Pre-Corte
+              </button>
+
               {/* Botones de Acción */}
               <div className="flex space-x-3">
                 <button
