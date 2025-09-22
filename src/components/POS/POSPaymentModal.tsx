@@ -453,8 +453,14 @@ export function POSPaymentModal({ order, client, onClose, onConfirm, onProcessPa
 
   const processPayment = async (overrideStock = false) => {
     try {
-      // Generate and download .txt ticket automatically before processing payment
-      generateAndDownloadTicket();
+      // Generate tickets based on payment method
+      if (paymentMethod === 'credit') {
+        // For credit payments, generate two tickets (client and caja)
+        generateCreditTickets();
+      } else {
+        // For other payment methods, generate single ticket
+        generateAndDownloadTicket();
+      }
       
       // Handle vale payment - update vale balance BEFORE processing payment
       if (paymentMethod === 'vales' && selectedVale) {
@@ -523,6 +529,7 @@ export function POSPaymentModal({ order, client, onClose, onConfirm, onProcessPa
     const observations = order.observations && order.observations.trim() ? order.observations : 'ninguna';
     const driver = order.driver && order.driver.trim() ? order.driver : 'Sin chofer';
     const route = order.route && order.route.trim() ? order.route : 'Sin ruta';
+    const userAvatar = user?.avatar || 'Sin avatar';
 
     const getPaymentMethodText = () => {
       switch (paymentMethod) {
@@ -589,6 +596,7 @@ CHOFER: ${driver || 'Sin chofer'}
 RUTA: ${route || 'Sin ruta'}
 
 LE ATENDIO: ${user?.name || 'Usuario'}
+AVATAR: ${userAvatar}
 
 GRACIAS POR SU COMPRA
 ==========================
@@ -607,6 +615,121 @@ SISTEMA ERP DURAN
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+  };
+
+  const generateCreditTickets = () => {
+    if (!order) return;
+
+    const observations = order.observations && order.observations.trim() ? order.observations : 'ninguna';
+    const driver = order.driver && order.driver.trim() ? order.driver : 'Sin chofer';
+    const route = order.route && order.route.trim() ? route : 'Sin ruta';
+    const userAvatar = user?.avatar || 'Sin avatar';
+
+    // Ticket para el Cliente
+    const clientTicketContent = `
+DURAN ERP - PUNTO DE VENTA
+==========================
+
+COMPROBANTE DE VENTA A CREDITO
+*** COPIA CLIENTE ***
+
+FOLIO: ${order.id.slice(-6).toUpperCase()}
+FECHA: ${new Date().toLocaleDateString('es-MX')}
+HORA: ${new Date().toLocaleTimeString('es-MX')}
+
+CLIENTE: ${order.client_name}
+
+PRODUCTOS:
+--------------------------
+CANT. PRODUCTO            P. UNITARIO     TOTAL
+${order.items.map(item =>
+  `${item.quantity.toString().padEnd(4)} ${item.product_name.length > 20 ? item.product_name.substring(0, 20) : item.product_name.padEnd(20)} $${(item.total / item.quantity).toFixed(2).padStart(8)} $${item.total.toFixed(2).padStart(8)}`
+).join('\n')}
+--------------------------
+
+SUBTOTAL: $${order.subtotal.toFixed(2)}
+${order.discount_total > 0 ? `DESCUENTO: -$${order.discount_total.toFixed(2)}\n` : ''}TOTAL: $${amountToPay.toFixed(2)}
+
+METODO DE PAGO: CREDITO
+${isAlreadyPaid ? `SALDO ANTERIOR: $${amountPaid.toFixed(2)}\nPAGO ACTUAL: $${amountToPay.toFixed(2)}\n` : ''}
+OBSERVACIONES: ${observations || 'ninguna'}
+CHOFER: ${driver || 'Sin chofer'}
+RUTA: ${route || 'Sin ruta'}
+
+LE ATENDIO: ${user?.name || 'Usuario'}
+AVATAR: ${userAvatar}
+
+*** VENTA A CREDITO ***
+CONSERVE ESTE COMPROBANTE
+==========================
+${new Date().toLocaleString('es-MX')}
+SISTEMA ERP DURAN
+    `;
+
+    // Ticket para la Caja
+    const cajaTicketContent = `
+DURAN ERP - PUNTO DE VENTA
+==========================
+
+COMPROBANTE DE VENTA A CREDITO
+*** COPIA CAJA ***
+
+FOLIO: ${order.id.slice(-6).toUpperCase()}
+FECHA: ${new Date().toLocaleDateString('es-MX')}
+HORA: ${new Date().toLocaleTimeString('es-MX')}
+
+CLIENTE: ${order.client_name}
+
+PRODUCTOS:
+--------------------------
+CANT. PRODUCTO            P. UNITARIO     TOTAL
+${order.items.map(item =>
+  `${item.quantity.toString().padEnd(4)} ${item.product_name.length > 20 ? item.product_name.substring(0, 20) : item.product_name.padEnd(20)} $${(item.total / item.quantity).toFixed(2).padStart(8)} $${item.total.toFixed(2).padStart(8)}`
+).join('\n')}
+--------------------------
+
+SUBTOTAL: $${order.subtotal.toFixed(2)}
+${order.discount_total > 0 ? `DESCUENTO: -$${order.discount_total.toFixed(2)}\n` : ''}TOTAL: $${amountToPay.toFixed(2)}
+
+METODO DE PAGO: CREDITO
+${isAlreadyPaid ? `SALDO ANTERIOR: $${amountPaid.toFixed(2)}\nPAGO ACTUAL: $${amountToPay.toFixed(2)}\n` : ''}
+OBSERVACIONES: ${observations || 'ninguna'}
+CHOFER: ${driver || 'Sin chofer'}
+RUTA: ${route || 'Sin ruta'}
+
+LE ATENDIO: ${user?.name || 'Usuario'}
+AVATAR: ${userAvatar}
+
+*** ARCHIVO INTERNO CAJA ***
+PARA CONTROL DE CREDITOS
+==========================
+${new Date().toLocaleString('es-MX')}
+SISTEMA ERP DURAN
+    `;
+
+    // Download client ticket
+    const clientBlob = new Blob([clientTicketContent], { type: 'text/plain;charset=utf-8' });
+    const clientUrl = window.URL.createObjectURL(clientBlob);
+    const clientA = document.createElement('a');
+    clientA.href = clientUrl;
+    clientA.download = `Ticket_Credito_Cliente_${order.id.slice(-6).toUpperCase()}_ffd.txt`;
+    document.body.appendChild(clientA);
+    clientA.click();
+    document.body.removeChild(clientA);
+    window.URL.revokeObjectURL(clientUrl);
+
+    // Download caja ticket after 2 seconds
+    setTimeout(() => {
+      const cajaBlob = new Blob([cajaTicketContent], { type: 'text/plain;charset=utf-8' });
+      const cajaUrl = window.URL.createObjectURL(cajaBlob);
+      const cajaA = document.createElement('a');
+      cajaA.href = cajaUrl;
+      cajaA.download = `Ticket_Credito_Caja_${order.id.slice(-6).toUpperCase()}_ffd.txt`;
+      document.body.appendChild(cajaA);
+      cajaA.click();
+      document.body.removeChild(cajaA);
+      window.URL.revokeObjectURL(cajaUrl);
+    }, 2000);
   };
 
   const handleCreditAuth = () => {

@@ -29,6 +29,8 @@ export function POSCashCutsModal({ onClose }: POSCashCutsModalProps) {
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState('');
+  const [showPreCutModal, setShowPreCutModal] = useState(false);
+  const [currentCashRegister, setCurrentCashRegister] = useState<any>(null);
 
   useEffect(() => {
     fetchCashCuts();
@@ -78,11 +80,6 @@ export function POSCashCutsModal({ onClose }: POSCashCutsModalProps) {
     }
   };
 
-  const filteredCuts = cashCuts.filter(cut => {
-    if (dateFilter && cut.date !== dateFilter) return false;
-    return true;
-  });
-
   const exportCashCut = (cut: CashCut) => {
     const content = `
 CORTE DE CAJA - ${new Date(cut.date).toLocaleDateString('es-MX')}
@@ -125,6 +122,213 @@ Generado el ${new Date().toLocaleString('es-MX')}
     a.click();
     window.URL.revokeObjectURL(url);
   };
+
+  const handlePreCutPreview = async () => {
+    try {
+      // Fetch current open cash register for the user
+      const { data: openRegister, error } = await supabase
+        .from('cash_registers')
+        .select(`
+          *,
+          users!cash_registers_user_id_fkey(name, avatar)
+        `)
+        .eq('user_id', user?.id)
+        .eq('status', 'open')
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!openRegister) {
+        alert('No hay una caja abierta para generar el pre-corte');
+        return;
+      }
+
+      // Fetch sales for this cash register session
+      const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select('id, total, created_at, client_name')
+        .eq('created_by', user?.id)
+        .gte('created_at', openRegister.opened_at)
+        .lte('created_at', new Date().toISOString());
+
+      if (salesError) throw salesError;
+
+      const totalSales = salesData?.reduce((sum, sale) => sum + sale.total, 0) || 0;
+      const ticketCount = salesData?.length || 0;
+      const averageTicket = ticketCount > 0 ? totalSales / ticketCount : 0;
+      const expectedCash = openRegister.opening_amount + openRegister.total_cash;
+
+      setCurrentCashRegister({
+        ...openRegister,
+        calculated_sales: totalSales,
+        ticket_count: ticketCount,
+        average_ticket: averageTicket,
+        expected_cash: expectedCash,
+        sales_detail: salesData || []
+      });
+      setShowPreCutModal(true);
+    } catch (err) {
+      console.error('Error fetching pre-cut data:', err);
+      alert('Error al obtener datos para el pre-corte');
+    }
+  };
+
+  const printPreCutTicket = () => {
+    if (!currentCashRegister) return;
+
+    const content = `
+PRE CORTE DE CAJA
+==================
+
+RESUMEN GENERAL
+
+INFORMACIÓN DE LA CAJA:
+- Usuario: ${currentCashRegister.users?.name || 'Usuario'}
+- Avatar: ${currentCashRegister.users?.avatar || 'Sin avatar'}
+- Fecha: ${new Date().toLocaleDateString('es-MX')}
+- Hora: ${new Date().toLocaleTimeString('es-MX')}
+- Caja ID: ${currentCashRegister.id.slice(-6).toUpperCase()}
+
+APERTURA DE CAJA:
+- Monto de Apertura: $${currentCashRegister.opening_amount.toFixed(2)}
+- Hora de Apertura: ${new Date(currentCashRegister.opened_at).toLocaleTimeString('es-MX')}
+- Tiempo Activo: ${Math.floor((Date.now() - new Date(currentCashRegister.opened_at).getTime()) / (1000 * 60 * 60))}h ${Math.floor(((Date.now() - new Date(currentCashRegister.opened_at).getTime()) % (1000 * 60 * 60)) / (1000 * 60))}m
+
+VENTAS REALIZADAS:
+- Total de Ventas: $${currentCashRegister.calculated_sales.toFixed(2)}
+- Número de Tickets: ${currentCashRegister.ticket_count}
+- Ticket Promedio: $${currentCashRegister.average_ticket.toFixed(2)}
+- Ventas en Efectivo: $${currentCashRegister.total_cash.toFixed(2)}
+- Ventas con Tarjeta: $${currentCashRegister.total_card.toFixed(2)}
+- Ventas Transferencia: $${currentCashRegister.total_transfer.toFixed(2)}
+
+EFECTIVO ESPERADO:
+- Apertura: $${currentCashRegister.opening_amount.toFixed(2)}
+- + Ventas Efectivo: $${currentCashRegister.total_cash.toFixed(2)}
+- = Efectivo Esperado: $${currentCashRegister.expected_cash.toFixed(2)}
+
+DETALLE DE VENTAS:
+==================
+${currentCashRegister.sales_detail.map((sale: any, index: number) => `
+${index + 1}. FOLIO: #${sale.id.slice(-6).toUpperCase()}
+   CLIENTE: ${sale.client_name}
+   HORA: ${new Date(sale.created_at).toLocaleTimeString('es-MX')}
+   TOTAL: $${sale.total.toFixed(2)}
+`).join('')}
+
+==================
+ESTE ES UN PRE-CORTE
+NO ES EL CORTE OFICIAL
+==================
+
+SISTEMA ERP DURAN
+${new Date().toLocaleString('es-MX')}
+    `;
+
+    // Create and download .txt file
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Pre_Corte_Caja_${new Date().toISOString().split('T')[0]}_${new Date().toLocaleTimeString('es-MX').replace(/:/g, '')}_ffd.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+
+    // Also create print window
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+        <head>
+          <title>Pre_Corte_Caja_ffd.txt</title>
+          <style>
+            body { 
+              font-family: 'Courier New', monospace; 
+              font-size: 12px; 
+              margin: 20px;
+              max-width: 400px;
+              line-height: 1.3;
+            }
+            .logo { text-align: left; margin-bottom: 10px; }
+            .logo img { max-width: 80px; height: auto; }
+            .header { text-align: left; font-weight: bold; margin-bottom: 10px; }
+            .separator { text-align: center; margin: 10px 0; }
+            .total { font-weight: bold; font-size: 14px; }
+            .footer { text-align: center; margin-top: 15px; font-size: 10px; }
+            .sale-detail { margin: 8px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+          </style>
+        </head>
+        <body>
+          <div class="logo">
+            <img src="${window.location.origin}/logoduran2.png" alt="DURAN" />
+          </div>
+          <div class="header">PRE CORTE DE CAJA</div>
+          <div class="separator">==================</div>
+          <br>
+          <div class="header">RESUMEN GENERAL</div>
+          <br>
+          <div>INFORMACIÓN DE LA CAJA:</div>
+          <div>- Usuario: ${currentCashRegister.users?.name || 'Usuario'}</div>
+          <div>- Avatar: ${currentCashRegister.users?.avatar || 'Sin avatar'}</div>
+          <div>- Fecha: ${new Date().toLocaleDateString('es-MX')}</div>
+          <div>- Hora: ${new Date().toLocaleTimeString('es-MX')}</div>
+          <div>- Caja ID: ${currentCashRegister.id.slice(-6).toUpperCase()}</div>
+          <br>
+          <div>APERTURA DE CAJA:</div>
+          <div>- Monto de Apertura: $${currentCashRegister.opening_amount.toFixed(2)}</div>
+          <div>- Hora de Apertura: ${new Date(currentCashRegister.opened_at).toLocaleTimeString('es-MX')}</div>
+          <div>- Tiempo Activo: ${Math.floor((Date.now() - new Date(currentCashRegister.opened_at).getTime()) / (1000 * 60 * 60))}h ${Math.floor(((Date.now() - new Date(currentCashRegister.opened_at).getTime()) % (1000 * 60 * 60)) / (1000 * 60))}m</div>
+          <br>
+          <div>VENTAS REALIZADAS:</div>
+          <div>- Total de Ventas: $${currentCashRegister.calculated_sales.toFixed(2)}</div>
+          <div>- Número de Tickets: ${currentCashRegister.ticket_count}</div>
+          <div>- Ticket Promedio: $${currentCashRegister.average_ticket.toFixed(2)}</div>
+          <div>- Ventas en Efectivo: $${currentCashRegister.total_cash.toFixed(2)}</div>
+          <div>- Ventas con Tarjeta: $${currentCashRegister.total_card.toFixed(2)}</div>
+          <div>- Ventas Transferencia: $${currentCashRegister.total_transfer.toFixed(2)}</div>
+          <br>
+          <div>EFECTIVO ESPERADO:</div>
+          <div>- Apertura: $${currentCashRegister.opening_amount.toFixed(2)}</div>
+          <div>- + Ventas Efectivo: $${currentCashRegister.total_cash.toFixed(2)}</div>
+          <div class="total">- = Efectivo Esperado: $${currentCashRegister.expected_cash.toFixed(2)}</div>
+          <br>
+          <div>DETALLE DE VENTAS:</div>
+          <div class="separator">==================</div>
+          ${currentCashRegister.sales_detail.map((sale: any, index: number) => `
+            <div class="sale-detail">
+              <div>${index + 1}. FOLIO: #${sale.id.slice(-6).toUpperCase()}</div>
+              <div>   CLIENTE: ${sale.client_name}</div>
+              <div>   HORA: ${new Date(sale.created_at).toLocaleTimeString('es-MX')}</div>
+              <div>   TOTAL: $${sale.total.toFixed(2)}</div>
+            </div>
+          `).join('')}
+          <br>
+          <div class="separator">==================</div>
+          <div class="total">ESTE ES UN PRE-CORTE</div>
+          <div class="total">NO ES EL CORTE OFICIAL</div>
+          <div class="separator">==================</div>
+          <br>
+          <div class="footer">SISTEMA ERP DURAN</div>
+          <div class="footer">${new Date().toLocaleString('es-MX')}</div>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    }
+
+    alert('Pre-corte de caja impreso exitosamente');
+  };
+
+  const filteredCuts = cashCuts.filter(cut => {
+    if (dateFilter && cut.date !== dateFilter) return false;
+    return true;
+  });
 
   const totalSales = filteredCuts.reduce((sum, cut) => sum + cut.total_sales, 0);
   const totalDifferences = filteredCuts.reduce((sum, cut) => sum + Math.abs(cut.difference), 0);
@@ -210,6 +414,14 @@ Generado el ${new Date().toLocaleString('es-MX')}
                   onChange={(e) => setDateFilter(e.target.value)}
                   className="px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-full sm:w-auto"
                 />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={handlePreCutPreview}
+                  className="px-3 sm:px-4 py-1 sm:py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:opacity-90 transition text-xs sm:text-sm font-medium"
+                >
+                  Vista Previa Pre-Corte
+                </button>
               </div>
             </div>
 
@@ -417,6 +629,90 @@ Generado el ${new Date().toLocaleString('es-MX')}
           </div>
         )}
       </div>
+
+      {/* Pre-Cut Preview Modal */}
+      {showPreCutModal && currentCashRegister && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-2 sm:p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[95vh] overflow-hidden">
+            <div className="bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 p-4 rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-bold text-lg">Vista Previa - Pre Corte de Caja</h3>
+                <button
+                  onClick={() => {
+                    setShowPreCutModal(false);
+                    setCurrentCashRegister(null);
+                  }}
+                  className="text-blue-100 hover:text-white"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(95vh-120px)]">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <h4 className="font-semibold text-blue-900 mb-3">Información de la Caja Actual</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Usuario:</span>
+                    <span className="font-medium">{currentCashRegister.users?.name || 'Usuario'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Avatar:</span>
+                    <span className="font-medium">{currentCashRegister.users?.avatar || 'Sin avatar'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Apertura:</span>
+                    <span className="font-mono text-blue-600">${currentCashRegister.opening_amount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Ventas Totales:</span>
+                    <span className="font-mono text-green-600">${currentCashRegister.calculated_sales.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Tickets Emitidos:</span>
+                    <span className="font-bold text-purple-600">{currentCashRegister.ticket_count}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Efectivo Esperado:</span>
+                    <span className="font-bold text-orange-600">${currentCashRegister.expected_cash.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium">Nota:</p>
+                    <p>Este es un pre-corte informativo. El corte oficial se realiza al cerrar la caja.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={printPreCutTicket}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Imprimir Pre-Corte
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPreCutModal(false);
+                    setCurrentCashRegister(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
