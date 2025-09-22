@@ -349,12 +349,12 @@ Generado el ${new Date().toLocaleString('es-MX')}
 
 
 const printPreCutTicket = () => {
-  if (!currentCashRegister) {
-    alert("Los datos para la descarga no están listos. Intenta de nuevo.");
-    return;
-  }
+    if (!currentCashRegister) {
+        alert("Los datos para la descarga no están listos. Intenta de nuevo.");
+        return;
+    }
 
-  const content = `
+    const content = `
 PRE CORTE DE CAJA
 ================================================
 
@@ -398,52 +398,95 @@ NO ES EL CORTE OFICIAL
 
 SISTEMA ERP DURAN
 ${new Date().toLocaleString('es-MX')}
-  `;
+    `;
 
-  // Create a Blob and URL for the text file to force download
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  
-  // Create an invisible anchor element to trigger the download
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Pre_Corte_Caja_${new Date().toISOString().split('T')[0]}_${new Date().toLocaleTimeString('es-MX').replace(/:/g, '')}_ffd.txt`;
-  
-  // This is the key part to make it work reliably
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  
-  // Clean up the URL object
-  URL.revokeObjectURL(url);
-
-  // Now, open the print dialog
-  const printWindow = window.open('', '_blank');
-  if (printWindow) {
-    printWindow.document.write(`
-      <html>
-      <head>
-        <title>Pre_Corte_Caja_ffd.txt</title>
-        <style>
-          body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; max-width: 400px; line-height: 1.3; }
-          .logo { text-align: left; margin-bottom: 10px; }
-          .logo img { max-width: 80px; height: auto; }
-          .header { text-align: left; font-weight: bold; margin-bottom: 10px; }
-          .separator { text-align: center; margin: 10px 0; }
-          .total { font-weight: bold; font-size: 14px; }
-          .footer { text-align: center; margin-top: 15px; font-size: 10px; }
-          .sale-detail { margin: 8px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-        </style>
-      </head>
-      <body>
-        ${content.replace(/\n/g, '<br>')}
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
-  }
-};
+    // Create a blob and download as text file for thermal printer
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Pre_Corte_Caja_${new Date().toISOString().split('T')[0]}_${new Date().toLocaleTimeString('es-MX').replace(/:/g, '')}_ffd.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    // Also show print dialog
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+        <head>
+          <title>Pre_Corte_Caja_ffd.txt</title>
+          <style>
+            body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; max-width: 400px; line-height: 1.3; }
+            .logo { text-align: left; margin-bottom: 10px; }
+            .logo img { max-width: 80px; height: auto; }
+            .header { text-align: left; font-weight: bold; margin-bottom: 10px; }
+            .separator { text-align: center; margin: 10px 0; }
+            .total { font-weight: bold; font-size: 14px; }
+            .footer { text-align: center; margin-top: 15px; font-size: 10px; }
+            .sale-detail { margin: 8px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+          </style>
+        </head>
+        <body>
+          <div class="logo">
+            <img src="${window.location.origin}/logoduran2.png" alt="DURAN" />
+          </div>
+          <div class="header">PRE CORTE DE CAJA</div>
+          <div class="separator">==================</div>
+          <br>
+          <div class="header">RESUMEN GENERAL</div>
+          <br>
+          <div>INFORMACIÓN DE LA CAJA:</div>
+          <div>- Usuario: ${currentCashRegister.users?.name || 'Usuario'}</div>
+          <div>- Fecha: ${new Date().toLocaleDateString('es-MX')}</div>
+          <div>- Hora: ${new Date().toLocaleTimeString('es-MX')}</div>
+          <div>- Caja ID: ${currentCashRegister.id.slice(-6).toUpperCase()}</div>
+          <br>
+          <div>APERTURA DE CAJA:</div>
+          <div>- Monto de Apertura: $${currentCashRegister.opening_amount.toFixed(2)}</div>
+          <div>- Hora de Apertura: ${new Date(currentCashRegister.opened_at).toLocaleTimeString('es-MX')}</div>
+          <div>- Tiempo Activo: ${Math.floor((Date.now() - new Date(currentCashRegister.opened_at).getTime()) / (1000 * 60 * 60))}h ${Math.floor(((Date.now() - new Date(currentCashRegister.opened_at).getTime()) % (1000 * 60 * 60)) / (1000 * 60))}m</div>
+          <br>
+          <div>VENTAS REALIZADAS:</div>
+          <div>- Total de Ventas: $${currentCashRegister.calculated_sales.toFixed(2)}</div>
+          <div>- Número de Tickets: ${currentCashRegister.ticket_count}</div>
+          <div>- Ticket Promedio: $${currentCashRegister.average_ticket.toFixed(2)}</div>
+          <div>- Ventas en Efectivo: $${currentCashRegister.total_cash.toFixed(2)}</div>
+          <div>- Ventas con Tarjeta: $${currentCashRegister.total_card.toFixed(2)}</div>
+          <div>- Ventas Transferencia: $${currentCashRegister.total_transfer.toFixed(2)}</div>
+          <br>
+          <div>EFECTIVO ESPERADO:</div>
+          <div>- Apertura: $${currentCashRegister.opening_amount.toFixed(2)}</div>
+          <div>- + Ventas Efectivo: $${currentCashRegister.total_cash.toFixed(2)}</div>
+          <div class="total">- = Efectivo Esperado: $${currentCashRegister.expected_cash.toFixed(2)}</div>
+          <br>
+          <div>DETALLE DE VENTAS:</div>
+          <div class="separator">==================</div>
+          ${currentCashRegister.sales_detail.map((sale, index) => `
+            <div class="sale-detail">
+              <div>${index + 1}. FOLIO: #${sale.id.slice(-6).toUpperCase()}</div>
+              <div>    CLIENTE: ${sale.client_name}</div>
+              <div>    HORA: ${new Date(sale.created_at).toLocaleTimeString('es-MX')}</div>
+              <div>    TOTAL: $${sale.total.toFixed(2)}</div>
+            </div>
+          `).join('')}
+          <br>
+          <div class="separator">==================</div>
+          <div class="total">ESTE ES UN PRE-CORTE</div>
+          <div class="total">NO ES EL CORTE OFICIAL</div>
+          <div class="separator">==================</div>
+          <br>
+          <div class="footer">SISTEMA ERP DURAN</div>
+          <div class="footer">${new Date().toLocaleString('es-MX')}</div>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
 
 
   const filteredCuts = cashCuts.filter(cut => {
