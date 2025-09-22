@@ -31,6 +31,7 @@ export function POSCashCutsModal({ onClose }: POSCashCutsModalProps) {
   const [dateFilter, setDateFilter] = useState('');
   const [showPreCutModal, setShowPreCutModal] = useState(false);
   const [currentCashRegister, setCurrentCashRegister] = useState<any>(null);
+  const [preCutDataReady, setPreCutDataReady] = useState(false);
 
   useEffect(() => {
     fetchCashCuts();
@@ -40,7 +41,6 @@ export function POSCashCutsModal({ onClose }: POSCashCutsModalProps) {
     try {
       setLoading(true);
       
-      // Fetch cash register data for current user only
       const { data, error } = await supabase
         .from('cash_registers')
         .select(`
@@ -125,7 +125,8 @@ Generado el ${new Date().toLocaleString('es-MX')}
 
   const handlePreCutPreview = async () => {
     try {
-      // Fetch current open cash register for the user
+      setPreCutDataReady(false); // Reset state
+      
       const { data: openRegister, error } = await supabase
         .from('cash_registers')
         .select(`
@@ -143,7 +144,6 @@ Generado el ${new Date().toLocaleString('es-MX')}
         return;
       }
 
-      // Fetch sales for this cash register session
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select('id, total, created_at, client_name')
@@ -167,6 +167,7 @@ Generado el ${new Date().toLocaleString('es-MX')}
         sales_detail: salesData || []
       });
       setShowPreCutModal(true);
+      setPreCutDataReady(true); // Data is ready, show download button
     } catch (err) {
       console.error('Error fetching pre-cut data:', err);
       alert('Error al obtener datos para el pre-corte');
@@ -174,7 +175,10 @@ Generado el ${new Date().toLocaleString('es-MX')}
   };
 
   const downloadPreCutTicket = () => {
-    if (!currentCashRegister) return;
+    if (!currentCashRegister) {
+        alert("Los datos para la descarga no están listos. Intenta de nuevo.");
+        return;
+    }
 
     const content = `
 PRE CORTE DE CAJA
@@ -231,7 +235,7 @@ ${new Date().toLocaleString('es-MX')}
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
-
+    
     alert('Pre-corte de caja descargado exitosamente');
   };
 
@@ -513,7 +517,6 @@ ${new Date().toLocaleString('es-MX')}
                     </div>
                   </div>
                 </div>
-
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
